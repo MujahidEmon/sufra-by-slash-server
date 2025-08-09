@@ -25,12 +25,29 @@ async function run() {
   try {
     //database function
     const menuCollection = await client.db("SufraDB").collection("menus");
+    const cartCollection = await client.db("SufraDB").collection("cart");
 
     app.get("/menu", async (req, res) => {
       const cursor = menuCollection.find();
       const result = await cursor.toArray();
       res.send(result);
     });
+
+
+    // cart collection
+    app.post('/cart', async(req, res) => {
+      const cartItem = req.body;
+      console.log(cartItem);
+      const result = await cartCollection.insertOne(cartItem);
+      res.send(result);
+    })
+
+    app.get('/cart', async(req, res) => {
+      const result = await cartCollection.find().toArray();
+      res.send(result);
+    })
+
+
 
     // Connect the client to the server	(optional starting in v4.7)
     await client.connect();
