@@ -26,6 +26,7 @@ async function run() {
     //database function
     const menuCollection = await client.db("SufraDB").collection("menus");
     const cartCollection = await client.db("SufraDB").collection("cart");
+    const usersCollection = await client.db("SufraDB").collection("users");
 
     app.get("/menu", async (req, res) => {
       const cursor = menuCollection.find();
@@ -58,6 +59,19 @@ async function run() {
       res.send(result);
     })
 
+
+    // users collection
+    app.post('/users', async(req, res) => {
+      const user = req.body;
+      console.log(user);
+      const result = await usersCollection.insertOne(user);
+      res.send(result);
+    })
+
+    app.get('/users', async(req, res) => {
+      const result = await usersCollection.find().toArray();
+      res.send(result);
+    })
 
     // Connect the client to the server	(optional starting in v4.7)
     await client.connect();
