@@ -34,56 +34,65 @@ async function run() {
       res.send(result);
     });
 
-
     // cart collection
-    app.post('/cart', async(req, res) => {
+    app.post("/cart", async (req, res) => {
       const cartItem = req.body;
       console.log(cartItem);
       const result = await cartCollection.insertOne(cartItem);
       res.send(result);
-    })
+    });
 
-    app.get('/cart', async(req, res) => {
-      const email = req.query.email
-      const query = {email: email}
+    app.get("/cart", async (req, res) => {
+      const email = req.query.email;
+      const query = { email: email };
       console.log(email);
       const result = await cartCollection.find(query).toArray();
       res.send(result);
-    })
+    });
 
-
-    app.delete('/cart/:id', async(req, res) => {
+    app.delete("/cart/:id", async (req, res) => {
       const id = req.params.id;
-      const query = {_id : new ObjectId(id)}
+      const query = { _id: new ObjectId(id) };
       const result = await cartCollection.deleteOne(query);
       res.send(result);
-    })
-
+    });
 
     // users collection
-    app.post('/users', async(req, res) => {
+    app.post("/users", async (req, res) => {
       const user = req.body;
-      const query = {email: user.email}
-      const existingUser = await usersCollection.findOne(query)
-      if(existingUser){
-        return res.send({message: 'User Already Exists', insertedId: null})
+      const query = { email: user.email };
+      const existingUser = await usersCollection.findOne(query);
+      if (existingUser) {
+        return res.send({ message: "User Already Exists", insertedId: null });
       }
       console.log(user);
       const result = await usersCollection.insertOne(user);
       res.send(result);
-    })
+    });
 
-    app.get('/users', async(req, res) => {
+    app.get("/users", async (req, res) => {
       const result = await usersCollection.find().toArray();
       res.send(result);
-    })
+    });
 
-    app.delete('/users/:id', async (req, res) => {
+    app.delete("/users/:id", async (req, res) => {
       const id = req.params.id;
-      const query = {_id: new ObjectId(id)}
+      const query = { _id: new ObjectId(id) };
       const result = await usersCollection.deleteOne(query);
       res.send(result);
-    })
+    });
+
+    app.patch("/users/admin/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const updatedDoc = {
+        $set: {
+          role: "admin",
+        },
+      };
+      const result = await usersCollection.updateOne(query, updatedDoc);
+      res.send(result);
+    });
 
     // Connect the client to the server	(optional starting in v4.7)
     await client.connect();
