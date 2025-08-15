@@ -1,6 +1,7 @@
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const cors = require("cors");
 const express = require("express");
+const jwt = require('jsonwebtoken');
 const app = express();
 require("dotenv").config();
 const port = process.env.PORT || 5000;
@@ -23,10 +24,36 @@ const client = new MongoClient(uri, {
 
 async function run() {
   try {
+
+
+    // jwt related api
+
+    app.post('/jwt', (req, res) => {
+      const user = req.body;
+      const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, {expiresIn: '365d'})
+      res.send({token})
+    })
+
+    const verifyToken = (req, res, next) => {
+      // console.log('in mid', req.headers.authorization);
+      if(!req.headers.authorization){
+        return res.status(401).send({message: 'Forbidden Access'})
+      }
+      const token = req.headers.authorization.split(' ')[1]
+      // console.log(token);
+      if(!token){
+        
+      }
+      next();
+    }
+
+
     //database function
     const menuCollection = await client.db("SufraDB").collection("menus");
     const cartCollection = await client.db("SufraDB").collection("cart");
     const usersCollection = await client.db("SufraDB").collection("users");
+
+
 
     app.get("/menu", async (req, res) => {
       const cursor = menuCollection.find();
@@ -70,7 +97,7 @@ async function run() {
       res.send(result);
     });
 
-    app.get("/users", async (req, res) => {
+    app.get("/users", verifyToken, async (req, res) => {
       const result = await usersCollection.find().toArray();
       res.send(result);
     });
