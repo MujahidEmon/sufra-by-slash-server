@@ -1,7 +1,7 @@
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const cors = require("cors");
 const express = require("express");
-const jwt = require('jsonwebtoken');
+const jwt = require("jsonwebtoken");
 const app = express();
 require("dotenv").config();
 const port = process.env.PORT || 5000;
@@ -24,44 +24,61 @@ const client = new MongoClient(uri, {
 
 async function run() {
   try {
-
-
     // jwt related api
-
-    app.post('/jwt', (req, res) => {
+    app.post("/jwt", (req, res) => {
       const user = req.body;
-      const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, {expiresIn: '365d'})
-      res.send({token})
-    })
+      const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, {
+        expiresIn: "1h",
+      });
+      res.send({ token });
+    });
 
     const verifyToken = (req, res, next) => {
       // console.log('in mid', req.headers.authorization);
-      if(!req.headers.authorization){
-        return res.status(401).send({message: 'Forbidden Access'})
+      if (!req.headers.authorization) {
+        return res.status(401).send({ message: "Forbidden Access" });
       }
-      const token = req.headers.authorization.split(' ')[1]
+      const token = req.headers.authorization.split(" ")[1];
       // console.log(token);
-      if(!token){
-        
+      jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, decoded) => {
+        if (err) {
+          return res.status(401).send({ message: "Forbidden Access" });
+        }
+
+        return req.user = decoded;
+      });
+      next();
+    };
+
+    const verifyAdmin = async (req, res, next) => {
+      const email = req.user.email;
+      console.log('in verifyAdmin', email);
+      const query = { email: email };
+      const user = await usersCollection.findOne(query);
+      const isAdmin = user?.role === "admin";
+      if (!isAdmin) {
+        return res
+          .status(403)
+          .send({
+            message: "Unauthorized Access. Please login with admin email",
+          });
       }
       next();
-    }
+    };
 
-
-    //database function
+    //database collections
     const menuCollection = await client.db("SufraDB").collection("menus");
     const cartCollection = await client.db("SufraDB").collection("cart");
     const usersCollection = await client.db("SufraDB").collection("users");
 
-
-
+    // menu related api
     app.get("/menu", async (req, res) => {
       const cursor = menuCollection.find();
       const result = await cursor.toArray();
       res.send(result);
     });
 
-    // cart collection
+    // cart related api
     app.post("/cart", async (req, res) => {
       const cartItem = req.body;
       console.log(cartItem);
@@ -72,7 +89,7 @@ async function run() {
     app.get("/cart", async (req, res) => {
       const email = req.query.email;
       const query = { email: email };
-      console.log(email);
+      // console.log(email);
       const result = await cartCollection.find(query).toArray();
       res.send(result);
     });
@@ -84,7 +101,7 @@ async function run() {
       res.send(result);
     });
 
-    // users collection
+    // users related api
     app.post("/users", async (req, res) => {
       const user = req.body;
       const query = { email: user.email };
@@ -92,24 +109,28 @@ async function run() {
       if (existingUser) {
         return res.send({ message: "User Already Exists", insertedId: null });
       }
-      console.log(user);
+      // console.log(user);
       const result = await usersCollection.insertOne(user);
       res.send(result);
     });
 
-    app.get("/users", verifyToken, async (req, res) => {
+
+
+    app.get("/users", verifyToken, verifyAdmin, async (req, res) => {
       const result = await usersCollection.find().toArray();
       res.send(result);
     });
 
-    app.delete("/users/:id", async (req, res) => {
+    
+
+    app.delete("/users/:id", verifyToken, verifyAdmin, async (req, res) => {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) };
       const result = await usersCollection.deleteOne(query);
       res.send(result);
     });
 
-    app.patch("/users/admin/:id", async (req, res) => {
+    app.patch("/users/admin/:id", verifyToken, verifyAdmin, async (req, res) => {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) };
       const updatedDoc = {
@@ -119,6 +140,22 @@ async function run() {
       };
       const result = await usersCollection.updateOne(query, updatedDoc);
       res.send(result);
+    });
+
+    app.get("/users/admin/:email", verifyToken, async (req, res) => {
+      const email = req.params.email;
+      if (email !== req.user.email) {
+        res.status(403).send({
+          message: "Unauthorized Access. Please try again with valid email.",
+        });
+      }
+      const query = { email: email };
+      const user = await usersCollection.findOne(query);
+      let admin = false;
+      if (user) {
+        admin = user?.role === "admin";
+      }
+      res.send({ admin });
     });
 
     // Connect the client to the server	(optional starting in v4.7)
