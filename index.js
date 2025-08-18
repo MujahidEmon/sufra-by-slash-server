@@ -78,6 +78,12 @@ async function run() {
       res.send(result);
     });
 
+    app.post('/menu', verifyToken, verifyAdmin, async(req, res) => {
+      const menuItem = req.body;
+      const result = await menuCollection.insertOne(menuItem);
+      res.send(result)
+    })
+
     // cart related api
     app.post("/cart", async (req, res) => {
       const cartItem = req.body;
