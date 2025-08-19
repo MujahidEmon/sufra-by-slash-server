@@ -28,7 +28,7 @@ async function run() {
     app.post("/jwt", (req, res) => {
       const user = req.body;
       const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, {
-        expiresIn: "1h",
+        expiresIn: "365d",  
       });
       res.send({ token });
     });
@@ -45,23 +45,21 @@ async function run() {
           return res.status(401).send({ message: "Forbidden Access" });
         }
 
-        return req.user = decoded;
+        return (req.user = decoded);
       });
       next();
     };
 
     const verifyAdmin = async (req, res, next) => {
       const email = req.user.email;
-      console.log('in verifyAdmin', email);
+      console.log("in verifyAdmin", email);
       const query = { email: email };
       const user = await usersCollection.findOne(query);
       const isAdmin = user?.role === "admin";
       if (!isAdmin) {
-        return res
-          .status(403)
-          .send({
-            message: "Unauthorized Access. Please login with admin email",
-          });
+        return res.status(403).send({
+          message: "Unauthorized Access. Please login with admin email",
+        });
       }
       next();
     };
@@ -78,19 +76,48 @@ async function run() {
       res.send(result);
     });
 
-    app.post('/menu', verifyToken, verifyAdmin, async(req, res) => {
+    app.get("/menu/:id", async (req, res) => {
+      const id = req.params.id;
+      // console.log(toString(id));
+      const query = { _id: new ObjectId(id) };
+      console.log(query);
+      const result = await menuCollection.findOne(query);
+      console.log(result);
+      res.send(result);
+    });
+
+    app.post("/menu", verifyToken, verifyAdmin, async (req, res) => {
       const menuItem = req.body;
       const result = await menuCollection.insertOne(menuItem);
+      res.send(result);
+    });
+
+    app.patch('/menu/:id', verifyToken, verifyAdmin, async(req, res) => {
+      const item = req.body;
+      const id = req.params.id;
+      const filter = {_id: new ObjectId(id)}
+      const updatedDoc = {
+        $set:{
+          name: item.name,
+          recipe: item.recipe,
+          price: item.price,
+          category: item.category,
+          image: item.image
+        }
+      }
+
+      const result = await menuCollection.updateOne(filter, updatedDoc);
       res.send(result)
     })
-    
-    app.delete('/menu/:id', verifyToken, verifyAdmin, async(req, res) => {
+
+
+    app.delete("/menu/:id", verifyToken, verifyAdmin, async (req, res) => {
       const id = req.params.id;
-      const query = { _id: new ObjectId(id) }
+
+      const query = { _id: new ObjectId(id) };
       const result = await menuCollection.deleteOne(query);
       res.send(result);
-    }) 
-
+    });
 
     // cart related api
     app.post("/cart", async (req, res) => {
@@ -128,14 +155,10 @@ async function run() {
       res.send(result);
     });
 
-
-
     app.get("/users", verifyToken, verifyAdmin, async (req, res) => {
       const result = await usersCollection.find().toArray();
       res.send(result);
     });
-
-    
 
     app.delete("/users/:id", verifyToken, verifyAdmin, async (req, res) => {
       const id = req.params.id;
@@ -144,17 +167,22 @@ async function run() {
       res.send(result);
     });
 
-    app.patch("/users/admin/:id", verifyToken, verifyAdmin, async (req, res) => {
-      const id = req.params.id;
-      const query = { _id: new ObjectId(id) };
-      const updatedDoc = {
-        $set: {
-          role: "admin",
-        },
-      };
-      const result = await usersCollection.updateOne(query, updatedDoc);
-      res.send(result);
-    });
+    app.patch(
+      "/users/admin/:id",
+      verifyToken,
+      verifyAdmin,
+      async (req, res) => {
+        const id = req.params.id;
+        const query = { _id: new ObjectId(id) };
+        const updatedDoc = {
+          $set: {
+            role: "admin",
+          },
+        };
+        const result = await usersCollection.updateOne(query, updatedDoc);
+        res.send(result);
+      }
+    );
 
     app.get("/users/admin/:email", verifyToken, async (req, res) => {
       const email = req.params.email;
