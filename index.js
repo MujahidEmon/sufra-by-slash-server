@@ -2,10 +2,11 @@ const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const cors = require("cors");
 const express = require("express");
 const jwt = require("jsonwebtoken");
+const Stripe = require("stripe");
 const app = express();
 require("dotenv").config();
 const port = process.env.PORT || 5000;
-
+const stripe = Stripe(process.env.STRIPE_SECRET);
 //middlewares
 
 app.use(cors());
@@ -28,7 +29,7 @@ async function run() {
     app.post("/jwt", (req, res) => {
       const user = req.body;
       const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, {
-        expiresIn: "365d",  
+        expiresIn: "365d",
       });
       res.send({ token });
     });
@@ -68,6 +69,7 @@ async function run() {
     const menuCollection = await client.db("SufraDB").collection("menus");
     const cartCollection = await client.db("SufraDB").collection("cart");
     const usersCollection = await client.db("SufraDB").collection("users");
+    const ordersCollection = await client.db("SufraDB").collection("orders");
 
     // menu related api
     app.get("/menu", async (req, res) => {
@@ -92,24 +94,23 @@ async function run() {
       res.send(result);
     });
 
-    app.patch('/menu/:id', verifyToken, verifyAdmin, async(req, res) => {
+    app.patch("/menu/:id", verifyToken, verifyAdmin, async (req, res) => {
       const item = req.body;
       const id = req.params.id;
-      const filter = {_id: new ObjectId(id)}
+      const filter = { _id: new ObjectId(id) };
       const updatedDoc = {
-        $set:{
+        $set: {
           name: item.name,
           recipe: item.recipe,
           price: item.price,
           category: item.category,
-          image: item.image
-        }
-      }
+          image: item.image,
+        },
+      };
 
       const result = await menuCollection.updateOne(filter, updatedDoc);
-      res.send(result)
-    })
-
+      res.send(result);
+    });
 
     app.delete("/menu/:id", verifyToken, verifyAdmin, async (req, res) => {
       const id = req.params.id;
@@ -140,6 +141,22 @@ async function run() {
       const query = { _id: new ObjectId(id) };
       const result = await cartCollection.deleteOne(query);
       res.send(result);
+    });
+
+    // payment API
+
+    app.post("/create-payment-intent",verifyToken, async (req, res) => {
+      const { price } = req.body;
+      console.log(price);
+      const totalPrice = parseInt(price * 100);
+      console.log(totalPrice);
+      const paymentIntent = await stripe.paymentIntents.create({
+        amount: totalPrice,
+        currency: "usd",
+        payment_method_types: ["card"],
+      });
+      // console.log(paymentIntent);
+      res.send({ clientSecret: paymentIntent.client_secret });
     });
 
     // users related api
@@ -198,6 +215,21 @@ async function run() {
         admin = user?.role === "admin";
       }
       res.send({ admin });
+    });
+
+    // order related APIs
+
+    app.post("/orders", verifyToken, async (req, res) => {
+      const order = req.body;
+      console.log(order);
+      const result = await ordersCollection.insertOne(order);
+      res.send(result);
+    });
+
+    // TODO make secure
+    app.get("/orders", async (req, res) => {
+      const result = await ordersCollection.find().toArray();
+      res.send(result);
     });
 
     // Connect the client to the server	(optional starting in v4.7)
