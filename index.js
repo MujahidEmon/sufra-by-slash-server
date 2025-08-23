@@ -70,6 +70,9 @@ async function run() {
     const cartCollection = await client.db("SufraDB").collection("cart");
     const usersCollection = await client.db("SufraDB").collection("users");
     const ordersCollection = await client.db("SufraDB").collection("orders");
+    const paymentsCollection = await client
+      .db("SufraDB")
+      .collection("payments");
 
     // menu related api
     app.get("/menu", async (req, res) => {
@@ -145,7 +148,7 @@ async function run() {
 
     // payment API
 
-    app.post("/create-payment-intent",verifyToken, async (req, res) => {
+    app.post("/create-payment-intent", verifyToken, async (req, res) => {
       const { price } = req.body;
       console.log(price);
       const totalPrice = parseInt(price * 100);
@@ -157,6 +160,31 @@ async function run() {
       });
       // console.log(paymentIntent);
       res.send({ clientSecret: paymentIntent.client_secret });
+    });
+
+    app.post("/payments", verifyToken, async (req, res) => {
+      const paymentInfo = req.body;
+      const paymentResult = await paymentsCollection.insertOne(paymentInfo);
+
+      const query = {
+        _id: {
+          $in: paymentInfo.cartIds.map((id) => new ObjectId(id)),
+        },
+      };
+
+      const deleteResult = await cartCollection.deleteMany(query);
+
+      res.send({ paymentResult, deleteResult });
+    });
+
+    app.get("/payments/:email", verifyToken, async (req, res) => {
+      const query = { email: req.params.email };
+      if(req.params.email !== req.user.email){
+        return res.status(403).send({message: 'Forbidden Access'})
+      }
+
+      const result = await paymentsCollection.find(query).toArray();
+      res.send(result);
     });
 
     // users related api
