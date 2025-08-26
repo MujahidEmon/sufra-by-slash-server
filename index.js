@@ -25,6 +25,15 @@ const client = new MongoClient(uri, {
 
 async function run() {
   try {
+    //database collections
+    const menuCollection = await client.db("SufraDB").collection("menus");
+    const cartCollection = await client.db("SufraDB").collection("cart");
+    const usersCollection = await client.db("SufraDB").collection("users");
+    const ordersCollection = await client.db("SufraDB").collection("orders");
+    const paymentsCollection = await client
+      .db("SufraDB")
+      .collection("payments");
+
     // jwt related api
     app.post("/jwt", (req, res) => {
       const user = req.body;
@@ -46,33 +55,24 @@ async function run() {
           return res.status(401).send({ message: "Forbidden Access" });
         }
 
-        return (req.user = decoded);
+        req.decoded = decoded;
+        next();
       });
-      next();
     };
 
     const verifyAdmin = async (req, res, next) => {
-      const email = req.user.email;
-      console.log("in verifyAdmin", email);
+      const email = req.decoded.email;
+      // console.log("in verifyAdmin", email);
       const query = { email: email };
       const user = await usersCollection.findOne(query);
       const isAdmin = user?.role === "admin";
-      if (!isAdmin) {
+      if (user.role !== "admin") {
         return res.status(403).send({
           message: "Unauthorized Access. Please login with admin email",
         });
       }
       next();
     };
-
-    //database collections
-    const menuCollection = await client.db("SufraDB").collection("menus");
-    const cartCollection = await client.db("SufraDB").collection("cart");
-    const usersCollection = await client.db("SufraDB").collection("users");
-    const ordersCollection = await client.db("SufraDB").collection("orders");
-    const paymentsCollection = await client
-      .db("SufraDB")
-      .collection("payments");
 
     // menu related api
     app.get("/menu", async (req, res) => {
@@ -83,11 +83,8 @@ async function run() {
 
     app.get("/menu/:id", async (req, res) => {
       const id = req.params.id;
-      // console.log(toString(id));
       const query = { _id: new ObjectId(id) };
-      console.log(query);
       const result = await menuCollection.findOne(query);
-      console.log(result);
       res.send(result);
     });
 
@@ -117,7 +114,6 @@ async function run() {
 
     app.delete("/menu/:id", verifyToken, verifyAdmin, async (req, res) => {
       const id = req.params.id;
-
       const query = { _id: new ObjectId(id) };
       const result = await menuCollection.deleteOne(query);
       res.send(result);
@@ -179,10 +175,9 @@ async function run() {
 
     app.get("/payments/:email", verifyToken, async (req, res) => {
       const query = { email: req.params.email };
-      if(req.params.email !== req.user.email){
-        return res.status(403).send({message: 'Forbidden Access'})
+      if (req.params.email !== req.decoded.email) {
+        return res.status(403).send({ message: "Forbidden Access" });
       }
-
       const result = await paymentsCollection.find(query).toArray();
       res.send(result);
     });
@@ -231,7 +226,7 @@ async function run() {
 
     app.get("/users/admin/:email", verifyToken, async (req, res) => {
       const email = req.params.email;
-      if (email !== req.user.email) {
+      if (email !== req.decoded?.email) {
         res.status(403).send({
           message: "Unauthorized Access. Please try again with valid email.",
         });
@@ -258,6 +253,28 @@ async function run() {
     app.get("/orders", async (req, res) => {
       const result = await ordersCollection.find().toArray();
       res.send(result);
+    });
+
+    // Dashboard Stats
+    app.get("/admin-stats", async (req, res) => {
+      const customers = await usersCollection.estimatedDocumentCount();
+      const products = await menuCollection.estimatedDocumentCount();
+      const orders = await paymentsCollection.estimatedDocumentCount();
+
+      const result = await paymentsCollection.aggregate([{
+        $group: {
+          _id: null,
+          totalRevenue: { $sum: "$price" }
+        }
+      }]).toArray();
+      const revenue = result.length > 0 ? result[0].totalRevenue: 0;
+
+      res.send({
+        customers,
+        products,
+        orders,
+        revenue
+      });
     });
 
     // Connect the client to the server	(optional starting in v4.7)
