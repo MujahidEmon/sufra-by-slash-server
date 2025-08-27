@@ -256,25 +256,65 @@ async function run() {
     });
 
     // Dashboard Stats
-    app.get("/admin-stats", async (req, res) => {
+    app.get("/admin-stats", verifyToken, verifyAdmin, async (req, res) => {
       const customers = await usersCollection.estimatedDocumentCount();
       const products = await menuCollection.estimatedDocumentCount();
       const orders = await paymentsCollection.estimatedDocumentCount();
 
-      const result = await paymentsCollection.aggregate([{
-        $group: {
-          _id: null,
-          totalRevenue: { $sum: "$price" }
-        }
-      }]).toArray();
-      const revenue = result.length > 0 ? result[0].totalRevenue: 0;
+      const result = await paymentsCollection
+        .aggregate([
+          {
+            $group: {
+              _id: null,
+              totalRevenue: { $sum: "$price" },
+            },
+          },
+        ])
+        .toArray();
+      const revenue = result.length > 0 ? result[0].totalRevenue : 0;
 
       res.send({
         customers,
         products,
         orders,
-        revenue
+        revenue,
       });
+    });
+
+    // Order stats with aggregate
+
+    app.get("/order-stats", async (req, res) => {
+      const result = await paymentsCollection
+        .aggregate([
+          {
+            $unwind: "$menuIds",
+          },
+          {
+            $addFields: {
+              menuIdsObj: { $toObjectId: "$menuIds" },
+            },
+          },
+          {
+            $lookup: {
+              from: "menus",
+              localField: "menuIdsObj",
+              foreignField: "_id",
+              as: "Items",
+            },
+          },
+          {
+            $unwind: '$Items'
+          },
+          {
+            $group: {
+              _id: '$Items.category',
+              quantity: {$sum: 1},
+              revenue: {$sum: '$Items.price'}
+            }
+          }
+        ])
+        .toArray();
+      res.send(result);
     });
 
     // Connect the client to the server	(optional starting in v4.7)
